@@ -98,9 +98,42 @@ function toJavaStringLiteral(value) {
   return JSON.stringify(String(value));
 }
 
+function splitTopLevel(value, delimiter = ",") {
+  const parts = [];
+  let depth = 0;
+  let current = "";
+
+  for (const character of value) {
+    if (character === "<") {
+      depth += 1;
+    }
+
+    if (character === ">") {
+      depth -= 1;
+    }
+
+    if (character === delimiter && depth === 0) {
+      parts.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+
+  if (current.trim()) {
+    parts.push(current.trim());
+  }
+
+  return parts;
+}
+
+function normalizeJavaType(type) {
+  return type.replace(/\s+/g, "");
+}
+
 function parseJavaMethodSignature(code) {
   const match = code.match(
-    /public\s+(?!class\b)([A-Za-z_](?:\w|<|>|\[|\])*)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/,
+    /public\s+(?!class\b)([A-Za-z_](?:\w|<|>|,|\s|\[|\])*)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/,
   );
 
   if (!match) {
@@ -109,18 +142,18 @@ function parseJavaMethodSignature(code) {
 
   const [, returnType, methodName, rawParameters] = match;
   const parameters = rawParameters.trim()
-    ? rawParameters.split(",").map((parameter) => {
+    ? splitTopLevel(rawParameters).map((parameter) => {
         const parts = parameter.trim().split(/\s+/);
         const name = parts.pop();
         return {
-          type: parts.join(" "),
+          type: normalizeJavaType(parts.join(" ")),
           name,
         };
       })
     : [];
 
   return {
-    returnType,
+    returnType: normalizeJavaType(returnType),
     methodName,
     parameters,
   };
@@ -154,40 +187,114 @@ function toJavaArrayLiteral(type, values) {
   throw new Error(`Unsupported Java array type: ${type}`);
 }
 
+function toJavaListLiteral(type, values) {
+  if (type === "List<Integer>" || type === "ArrayList<Integer>") {
+    return `new java.util.ArrayList<>(java.util.Arrays.asList(${values.join(", ")}))`;
+  }
+
+  if (type === "List<String>" || type === "ArrayList<String>") {
+    return `new java.util.ArrayList<>(java.util.Arrays.asList(${values
+      .map(toJavaStringLiteral)
+      .join(", ")}))`;
+  }
+
+  if (type === "List<List<Integer>>" || type === "ArrayList<ArrayList<Integer>>") {
+    return `new java.util.ArrayList<>(java.util.Arrays.asList(${values
+      .map((row) => {
+        return `new java.util.ArrayList<>(java.util.Arrays.asList(${row.join(", ")}))`;
+      })
+      .join(", ")}))`;
+  }
+
+  throw new Error(`Unsupported Java list type: ${type}`);
+}
+
+function toJavaListNodeLiteral(values) {
+  if (values === null) {
+    return "null";
+  }
+
+  return `buildList(new int[] { ${values.join(", ")} })`;
+}
+
+function toJavaTreeNodeLiteral(values) {
+  if (values === null) {
+    return "null";
+  }
+
+  return `buildTree(new Integer[] { ${values
+    .map((value) => {
+      return value === null ? "null" : String(value);
+    })
+    .join(", ")} })`;
+}
+
 function toJavaLiteral(type, rawValue) {
-  if (type === "int") {
+  const normalizedType = normalizeJavaType(type);
+
+  if (normalizedType === "int") {
     return String(Number(rawValue));
   }
 
-  if (type === "boolean") {
+  if (normalizedType === "boolean") {
     return String(rawValue).trim().toLowerCase();
   }
 
-  if (type === "String") {
+  if (normalizedType === "String") {
     const parsedValue = String(rawValue).trim().startsWith("\"")
       ? parseJsonValue(rawValue)
       : rawValue;
     return toJavaStringLiteral(parsedValue);
   }
 
-  if (["int[]", "int[][]", "String[]", "char[]"].includes(type)) {
-    return toJavaArrayLiteral(type, parseJsonValue(rawValue));
+  if (["int[]", "int[][]", "String[]", "char[]"].includes(normalizedType)) {
+    return toJavaArrayLiteral(normalizedType, parseJsonValue(rawValue));
   }
 
-  throw new Error(`Unsupported Java parameter type: ${type}`);
+  if (
+    [
+      "List<Integer>",
+      "ArrayList<Integer>",
+      "List<String>",
+      "ArrayList<String>",
+      "List<List<Integer>>",
+      "ArrayList<ArrayList<Integer>>",
+    ].includes(normalizedType)
+  ) {
+    return toJavaListLiteral(normalizedType, parseJsonValue(rawValue));
+  }
+
+  if (normalizedType === "ListNode") {
+    return toJavaListNodeLiteral(parseJsonValue(rawValue));
+  }
+
+  if (normalizedType === "TreeNode") {
+    return toJavaTreeNodeLiteral(parseJsonValue(rawValue));
+  }
+
+  throw new Error(`Unsupported Java parameter type: ${normalizedType}`);
 }
 
 function getJavaSerializerSource(returnType) {
+  const normalizedReturnType = normalizeJavaType(returnType);
   const supportedReturnTypes = new Set([
     "int",
     "boolean",
     "String",
     "int[]",
     "int[][]",
+    "List<Integer>",
+    "List<String>",
+    "List<List<Integer>>",
+    "ArrayList<Integer>",
+    "ArrayList<String>",
+    "ArrayList<ArrayList<Integer>>",
+    "ListNode",
+    "TreeNode",
   ]);
 
-  if (!supportedReturnTypes.has(returnType)) {
-    throw new Error(`Unsupported Java return type: ${returnType}`);
+  if (!supportedReturnTypes.has(normalizedReturnType)) {
+    throw new Error(`Unsupported Java return type: ${normalizedReturnType}`);
   }
 
   return `
@@ -210,7 +317,68 @@ function getJavaSerializerSource(returnType) {
     static String serialize(int[][] value) {
         return java.util.Arrays.deepToString(value);
     }
+
+    static String serialize(java.util.List<?> value) {
+        return String.valueOf(value);
+    }
+
+    static String serialize(ListNode value) {
+        java.util.ArrayList<Integer> values = new java.util.ArrayList<>();
+        while (value != null) {
+            values.add(value.val);
+            value = value.next;
+        }
+        return String.valueOf(values);
+    }
+
+    static String serialize(TreeNode value) {
+        if (value == null) {
+            return "[]";
+        }
+        java.util.ArrayList<String> values = new java.util.ArrayList<>();
+        java.util.Queue<TreeNode> queue = new java.util.LinkedList<>();
+        queue.add(value);
+        while (!queue.isEmpty()) {
+            TreeNode node = queue.remove();
+            if (node == null) {
+                values.add("null");
+            } else {
+                values.add(String.valueOf(node.val));
+                queue.add(node.left);
+                queue.add(node.right);
+            }
+        }
+        while (!values.isEmpty() && values.get(values.size() - 1).equals("null")) {
+            values.remove(values.size() - 1);
+        }
+        return "[" + String.join(", ", values) + "]";
+    }
   `;
+}
+
+function getJavaSupportSource() {
+  return `
+class ListNode {
+    int val;
+    ListNode next;
+    ListNode() {}
+    ListNode(int val) { this.val = val; }
+    ListNode(int val, ListNode next) { this.val = val; this.next = next; }
+}
+
+class TreeNode {
+    int val;
+    TreeNode left;
+    TreeNode right;
+    TreeNode() {}
+    TreeNode(int val) { this.val = val; }
+    TreeNode(int val, TreeNode left, TreeNode right) {
+        this.val = val;
+        this.left = left;
+        this.right = right;
+    }
+}
+`;
 }
 
 function createJavaRunnerSource(code, testcases) {
@@ -240,10 +408,48 @@ function createJavaRunnerSource(code, testcases) {
     })
     .join("\n");
 
-  return `${normalizedCode}
+  return `import java.util.*;
+
+${getJavaSupportSource()}
+
+${normalizedCode}
 
 class Main {
     ${serializerSource}
+
+    static ListNode buildList(int[] values) {
+        ListNode dummy = new ListNode(0);
+        ListNode current = dummy;
+        for (int value : values) {
+            current.next = new ListNode(value);
+            current = current.next;
+        }
+        return dummy.next;
+    }
+
+    static TreeNode buildTree(Integer[] values) {
+        if (values.length == 0 || values[0] == null) {
+            return null;
+        }
+        TreeNode root = new TreeNode(values[0]);
+        java.util.Queue<TreeNode> queue = new java.util.ArrayDeque<>();
+        queue.add(root);
+        int index = 1;
+        while (!queue.isEmpty() && index < values.length) {
+            TreeNode node = queue.remove();
+            if (index < values.length && values[index] != null) {
+                node.left = new TreeNode(values[index]);
+                queue.add(node.left);
+            }
+            index++;
+            if (index < values.length && values[index] != null) {
+                node.right = new TreeNode(values[index]);
+                queue.add(node.right);
+            }
+            index++;
+        }
+        return root;
+    }
 
     public static void main(String[] args) {
         Solution solution = new Solution();
@@ -338,7 +544,7 @@ async function leetcodeGraphql(query, variables) {
 
 async function resolveTitleSlug(query) {
   if (!/^\d+$/.test(query)) {
-    return query;
+    throw new Error("Please import by problem number only.");
   }
 
   const response = await fetch(LEETCODE_PROBLEM_LIST_URL, {
@@ -395,7 +601,7 @@ function leetcodeProxyPlugin() {
         const query = requestUrl.searchParams.get("query")?.trim();
 
         if (!query) {
-          sendJson(res, 400, { error: "Missing problem number or title slug." });
+          sendJson(res, 400, { error: "Missing problem number." });
           return;
         }
 

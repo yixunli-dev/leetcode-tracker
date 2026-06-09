@@ -1432,7 +1432,9 @@ function App() {
 
     const query = importQuery.trim();
 
-    if (query === "") {
+    if (query === "" || !/^\d+$/.test(query)) {
+      setImportStatus("error");
+      setImportMessage("Enter a LeetCode problem number.");
       return;
     }
 
@@ -1770,13 +1772,14 @@ function App() {
             <form className="import-panel panel" onSubmit={handleImportProblem}>
               <div>
                 <p className="eyebrow">LeetCode Import</p>
-                <h2>Import by problem number or title slug</h2>
+                <h2>Import by problem number</h2>
               </div>
 
               <div className="import-row">
                 <input
-                  aria-label="LeetCode problem number or slug"
-                  placeholder="two-sum or 1"
+                  aria-label="LeetCode problem number"
+                  inputMode="numeric"
+                  placeholder="704"
                   value={importQuery}
                   onChange={(event) => {
                     setImportQuery(event.target.value);
