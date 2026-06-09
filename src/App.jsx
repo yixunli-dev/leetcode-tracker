@@ -6,105 +6,22 @@ const STORAGE_KEYS = {
   notes: "notes",
 };
 
-const DIFFICULTY_OPTIONS = ["Easy", "Medium", "Hard"];
 const LANGUAGE_OPTIONS = [
   { label: "Java", slug: "java" },
   { label: "Python", slug: "python" },
   { label: "Python3", slug: "python3" },
 ];
+const SOURCE_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "LeetCode", value: "leetcode" },
+  { label: "Image Upload", value: "image" },
+];
 const ROUTES = ["track", "search", "topics", "add"];
+const REMOVED_DEFAULT_PROBLEM_IDS = new Set([1, 2, 3, 1001]);
 const KNOWN_PROBLEM_NUMBERS = {
   "Two Sum": 1,
   "Valid Parentheses": 20,
-  "Binary Search": 704,
-  "Rotting Oranges": 994,
 };
-
-const defaultProblems = [
-  {
-    id: 1,
-    number: 1,
-    title: "Two Sum",
-    difficulty: "Easy",
-    topic: "Array",
-    topicTags: ["Array", "Hash Table"],
-    status: "Solved",
-    description:
-      "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
-    link: "https://leetcode.com/problems/two-sum/",
-    lastSolvedAt: "2026-05-20",
-  },
-  {
-    id: 2,
-    number: 704,
-    title: "Binary Search",
-    difficulty: "Easy",
-    topic: "Binary Search",
-    topicTags: ["Array", "Binary Search"],
-    status: "In Progress",
-    description:
-      "Given a sorted array and a target value, return the index if the target is found. Otherwise, return -1.",
-    link: "https://leetcode.com/problems/binary-search/",
-    lastSolvedAt: "",
-  },
-  {
-    id: 3,
-    number: 994,
-    title: "Rotting Oranges",
-    difficulty: "Medium",
-    topic: "BFS",
-    topicTags: ["Array", "Breadth-First Search", "Matrix"],
-    status: "Need Review",
-    description:
-      "Given a grid where 0 means empty, 1 means fresh orange, and 2 means rotten orange, return the minimum number of minutes until no fresh orange remains.",
-    link: "https://leetcode.com/problems/rotting-oranges/",
-    lastSolvedAt: "2026-05-23",
-  },
-  {
-    id: 1001,
-    number: "CS-1",
-    title: "Count Key Changes",
-    difficulty: "Easy",
-    topic: "String",
-    topicTags: ["Array", "String", "Simulation"],
-    status: "Not Started",
-    description:
-      "Given an array of uppercase and lowercase English letters recording, count how many times the user changed letter keys while typing. Uppercase and lowercase versions of the same letter use the same key.",
-    descriptionHtml: `
-      <p>You are given an array of uppercase and lowercase English letters <code>recording</code>, representing a sequence of letters typed by the user.</p>
-      <p>Your task is to count the number of times that the user changed keys while typing the sequence. Uppercase and lowercase letters for the same letter require the user to press the same letter key, ignoring modifiers like Shift or Caps Lock.</p>
-      <p>For example, typing <code>'W'</code> and <code>'w'</code> uses the same key, while typing <code>'W'</code> and <code>'E'</code> or typing <code>'W'</code> and <code>'e'</code> requires changing keys.</p>
-      <h3>Examples</h3>
-      <pre>recording = ["W","w","a","A","a","b","B"]
-Output: 2
-
-recording = ["w","w","a","w","a"]
-Output: 3</pre>
-      <h3>Constraints</h3>
-      <ul>
-        <li><code>1 &lt;= recording.length &lt;= 1000</code></li>
-        <li><code>recording</code> contains only uppercase and lowercase English letters.</li>
-      </ul>
-      <h3>Return</h3>
-      <p>Return the number of key changes as an integer.</p>
-    `,
-    exampleTestcases: `["W","w","a","A","a","b","B"]
-["w","w","a","w","a"]
-["a"]
-["A","a","A"]
-["a","B","b","C","c","a"]`,
-    codeTemplates: {
-      java: `class Solution {
-    public int solution(char[] recording) {
-        
-    }
-}`,
-    },
-    language: "java",
-    link: "",
-    lastSolvedAt: "",
-  },
-];
 
 function readStoredValue(key, fallback) {
   try {
@@ -117,19 +34,9 @@ function readStoredValue(key, fallback) {
 
 function getInitialProblems() {
   const storedProblems = readStoredValue(STORAGE_KEYS.problems, null);
-  const startingProblems = Array.isArray(storedProblems)
-    ? storedProblems
-    : defaultProblems;
-  const mergedProblems = [...startingProblems];
-
-  defaultProblems.forEach((defaultProblem) => {
-    const alreadyExists = mergedProblems.some((problem) => {
-      return problem.id === defaultProblem.id || problem.title === defaultProblem.title;
-    });
-
-    if (!alreadyExists) {
-      mergedProblems.push(defaultProblem);
-    }
+  const startingProblems = Array.isArray(storedProblems) ? storedProblems : [];
+  const mergedProblems = startingProblems.filter((problem) => {
+    return !REMOVED_DEFAULT_PROBLEM_IDS.has(problem.id);
   });
 
   return mergedProblems.map(normalizeProblem);
@@ -155,6 +62,7 @@ function normalizeProblem(problem) {
     difficulty: problem.difficulty ?? "Easy",
     topic: normalizedProblem.topic,
     topicTags,
+    source: problem.source === "image" ? "image" : "leetcode",
     status: problem.status ?? "Not Started",
     description: normalizedProblem.description,
     descriptionHtml: problem.descriptionHtml ?? "",
@@ -195,6 +103,14 @@ function getNextProblemId(problems) {
 
 function getTopicNames(problem) {
   return problem.topicTags?.length > 0 ? problem.topicTags : [problem.topic];
+}
+
+function getSourceLabel(source) {
+  return (
+    SOURCE_OPTIONS.find((option) => {
+      return option.value === source;
+    })?.label ?? "Image Upload"
+  );
 }
 
 function toFunctionName(title) {
@@ -983,14 +899,7 @@ function App() {
 
   const [searchText, setSearchText] = useState("");
   const [selectedTopic, setSelectedTopic] = useState("All");
-  const [formData, setFormData] = useState({
-    number: "",
-    title: "",
-    difficulty: "Easy",
-    topic: "",
-    description: "",
-    link: "",
-  });
+  const [selectedSource, setSelectedSource] = useState("all");
   const [importQuery, setImportQuery] = useState("");
   const [importStatus, setImportStatus] = useState("idle");
   const [importMessage, setImportMessage] = useState("");
@@ -1092,24 +1001,28 @@ function App() {
 
     return problems
       .filter((problem) => {
+        const problemSource = problem.source ?? "manual";
         const matchesSearch =
           normalizedSearch === "" ||
           problem.title.toLowerCase().includes(normalizedSearch) ||
           String(problem.number).includes(normalizedSearch) ||
           getTopicNames(problem).join(" ").toLowerCase().includes(normalizedSearch) ||
-          problem.description.toLowerCase().includes(normalizedSearch);
+          problem.description.toLowerCase().includes(normalizedSearch) ||
+          problemSource.toLowerCase().includes(normalizedSearch);
         const matchesTopic =
           selectedTopic === "All" || getTopicNames(problem).includes(selectedTopic);
+        const matchesSource =
+          selectedSource === "all" || problemSource === selectedSource;
 
         if (activePage === "topics") {
-          return matchesTopic;
+          return matchesTopic && matchesSource;
         }
 
         if (activePage === "search") {
-          return matchesSearch;
+          return matchesSearch && matchesSource;
         }
 
-        return matchesSearch && matchesTopic;
+        return matchesSearch && matchesTopic && matchesSource;
       })
       .sort((firstProblem, secondProblem) => {
         const firstNumber = Number(firstProblem.number);
@@ -1121,18 +1034,11 @@ function App() {
 
         return firstNumber - secondNumber;
       });
-  }, [activePage, problems, searchText, selectedTopic]);
+  }, [activePage, problems, searchText, selectedSource, selectedTopic]);
 
   function navigateTo(page) {
     window.history.pushState(null, "", `#/${page}`);
     setActivePage(page);
-  }
-
-  function updateFormData(field, value) {
-    setFormData({
-      ...formData,
-      [field]: value,
-    });
   }
 
   function updateSelectedProblem(field, value) {
@@ -1521,67 +1427,6 @@ function App() {
     });
   }
 
-  function handleAddProblem(event) {
-    event.preventDefault();
-
-    if (
-      formData.title.trim() === "" ||
-      formData.topic.trim() === "" ||
-      formData.description.trim() === ""
-    ) {
-      return;
-    }
-
-    const nextProblemId = getNextProblemId(problems);
-    const generatedTemplates = getGeneratedCodeTemplates({
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      topic: formData.topic.trim(),
-    });
-
-    const newProblem = {
-      id: nextProblemId,
-      number: formData.number.trim(),
-      title: formData.title.trim(),
-      difficulty: formData.difficulty,
-      topic: formData.topic.trim(),
-      topicTags: formData.topic
-        .split(",")
-        .map((topic) => {
-          return topic.trim();
-        })
-        .filter(Boolean),
-      status: "Not Started",
-      description: formData.description.trim(),
-      descriptionHtml: "",
-      exampleTestcases: "",
-      titleSlug: "",
-      codeTemplates: generatedTemplates,
-      language: "python3",
-      lastRunResult: "",
-      submissionStatus: "",
-      link: formData.link.trim(),
-      lastSolvedAt: "",
-    };
-
-    setProblems((currentProblems) => {
-      return [...currentProblems, newProblem];
-    });
-    setSelectedProblemId(newProblem.id);
-    setActiveCaseIndex(0);
-    setActiveTestTab("testcase");
-    setSelectedTopic("All");
-    setFormData({
-      number: "",
-      title: "",
-      difficulty: "Easy",
-      topic: "",
-      description: "",
-      link: "",
-    });
-    navigateTo("track");
-  }
-
   async function handleImportProblem(event) {
     event.preventDefault();
 
@@ -1632,6 +1477,7 @@ function App() {
         difficulty: payload.difficulty,
         topic: importedBaseProblem.topic,
         topicTags: importedTopicTags,
+        source: "leetcode",
         status: "Not Started",
         description: payload.description,
         descriptionHtml: payload.content,
@@ -1747,6 +1593,27 @@ function App() {
                   />
                 </label>
 
+                <div className="source-filter" aria-label="Problem source">
+                  {SOURCE_OPTIONS.map((sourceOption) => {
+                    return (
+                      <button
+                        key={sourceOption.value}
+                        className={
+                          selectedSource === sourceOption.value
+                            ? "source-filter-button active"
+                            : "source-filter-button"
+                        }
+                        type="button"
+                        onClick={() => {
+                          setSelectedSource(sourceOption.value);
+                        }}
+                      >
+                        {sourceOption.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <div className="problem-menu-header">
                   <span>#</span>
                   <span>Title</span>
@@ -1774,7 +1641,10 @@ function App() {
                           }}
                         >
                           <span>{problem.number || problem.id}</span>
-                          <strong>{problem.title}</strong>
+                          <strong>
+                            {problem.title}
+                            <small>{getSourceLabel(problem.source)}</small>
+                          </strong>
                           <span className={`difficulty-pill ${problem.difficulty}`}>
                             {problem.difficulty}
                           </span>
@@ -1934,93 +1804,20 @@ function App() {
               ) : null}
             </form>
 
-            <form className="add-form panel" onSubmit={handleAddProblem}>
-              <div className="edit-grid">
-                <div className="field">
-                  <label htmlFor="new-number">Problem number</label>
-                  <input
-                    id="new-number"
-                    inputMode="numeric"
-                    placeholder="e.g. 20"
-                    value={formData.number}
-                    onChange={(event) => {
-                      updateFormData("number", event.target.value);
-                    }}
-                  />
-                </div>
-
-                <div className="field">
-                  <label htmlFor="new-title">Title</label>
-                  <input
-                    id="new-title"
-                    placeholder="e.g. Valid Parentheses"
-                    value={formData.title}
-                    onChange={(event) => {
-                      updateFormData("title", event.target.value);
-                    }}
-                  />
-                </div>
-
-                <div className="field">
-                  <label htmlFor="new-difficulty">Difficulty</label>
-                  <select
-                    id="new-difficulty"
-                    value={formData.difficulty}
-                    onChange={(event) => {
-                      updateFormData("difficulty", event.target.value);
-                    }}
-                  >
-                    {DIFFICULTY_OPTIONS.map((difficulty) => {
-                      return (
-                        <option key={difficulty} value={difficulty}>
-                          {difficulty}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-
-                <div className="field">
-                  <label htmlFor="new-topic">Topic</label>
-                  <input
-                    id="new-topic"
-                    placeholder="Stack, Dynamic Programming, Graph..."
-                    value={formData.topic}
-                    onChange={(event) => {
-                      updateFormData("topic", event.target.value);
-                    }}
-                  />
-                </div>
-
-                <div className="field">
-                  <label htmlFor="new-link">LeetCode link</label>
-                  <input
-                    id="new-link"
-                    placeholder="Optional"
-                    value={formData.link}
-                    onChange={(event) => {
-                      updateFormData("link", event.target.value);
-                    }}
-                  />
-                </div>
+            <section className="import-panel panel">
+              <div>
+                <p className="eyebrow">Image Upload</p>
+                <h2>Upload screenshots to create a problem</h2>
               </div>
 
-              <div className="field">
-                <label htmlFor="new-description">Description</label>
-                <textarea
-                  id="new-description"
-                  placeholder="Paste the problem statement summary here"
-                  value={formData.description}
-                  onChange={(event) => {
-                    updateFormData("description", event.target.value);
-                  }}
-                />
+              <div className="image-import-placeholder">
+                <span>Coming next</span>
+                <p>
+                  This source will be used for problems parsed from screenshots.
+                </p>
               </div>
+            </section>
 
-              <button className="primary-button" type="submit">
-                Add problem
-              </button>
-            </form>
           </section>
         ) : (
           <>
@@ -2086,6 +1883,9 @@ function App() {
                                   </span>
                                 );
                               })}
+                              <span className="description-tag">
+                                {getSourceLabel(selectedProblem.source)}
+                              </span>
                               {selectedProblem.link ? (
                                 <a
                                   className="description-tag"

@@ -193,6 +193,20 @@ button {
   white-space: nowrap;
 }
 
+.problem-menu-row strong {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.problem-menu-row strong small {
+  color: #8f8f8f;
+  font-size: 10px;
+  font-weight: 400;
+}
+
 .menu-search-box {
   position: relative;
   display: flex;
@@ -214,6 +228,31 @@ button {
 .menu-search-box input:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+}
+
+.source-filter {
+  display: flex;
+  gap: 6px;
+  padding: 0 8px 8px;
+  overflow-x: auto;
+}
+
+.source-filter-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 10px;
+  color: #a3a3a3;
+  background: transparent;
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.source-filter-button:hover,
+.source-filter-button.active {
+  color: #f4f4f5;
+  background: #303030;
+  border-color: #555555;
 }
 
 .top-run-actions {
@@ -1087,8 +1126,7 @@ button {
   gap: 8px;
 }
 
-.field,
-.add-form {
+.field {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1122,6 +1160,24 @@ button {
 
 .import-message.error {
   color: #f87171;
+}
+
+.image-import-placeholder {
+  padding: 16px;
+  color: #a3a3a3;
+  background: #242424;
+  border: 1px dashed #4a4a4a;
+  border-radius: 8px;
+}
+
+.image-import-placeholder span {
+  display: block;
+  margin-bottom: 6px;
+  color: #f4f4f5;
+}
+
+.image-import-placeholder p {
+  margin: 0;
 }
 
 .field label {
