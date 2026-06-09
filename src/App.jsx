@@ -1,371 +1,2453 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+
+const STORAGE_KEYS = {
+  problems: "problems",
+  notes: "notes",
+};
+
+const DIFFICULTY_OPTIONS = ["Easy", "Medium", "Hard"];
+const LANGUAGE_OPTIONS = [
+  { label: "Java", slug: "java" },
+  { label: "Python", slug: "python" },
+  { label: "Python3", slug: "python3" },
+];
+const ROUTES = ["track", "search", "topics", "add"];
+const KNOWN_PROBLEM_NUMBERS = {
+  "Two Sum": 1,
+  "Valid Parentheses": 20,
+  "Binary Search": 704,
+  "Rotting Oranges": 994,
+};
 
 const defaultProblems = [
   {
     id: 1,
+    number: 1,
     title: "Two Sum",
     difficulty: "Easy",
     topic: "Array",
-    status: "Not Started",
+    topicTags: ["Array", "Hash Table"],
+    status: "Solved",
     description:
       "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+    link: "https://leetcode.com/problems/two-sum/",
+    lastSolvedAt: "2026-05-20",
   },
   {
     id: 2,
+    number: 704,
     title: "Binary Search",
     difficulty: "Easy",
     topic: "Binary Search",
-    status: "Not Started",
+    topicTags: ["Array", "Binary Search"],
+    status: "In Progress",
     description:
       "Given a sorted array and a target value, return the index if the target is found. Otherwise, return -1.",
+    link: "https://leetcode.com/problems/binary-search/",
+    lastSolvedAt: "",
   },
   {
     id: 3,
+    number: 994,
     title: "Rotting Oranges",
     difficulty: "Medium",
     topic: "BFS",
-    status: "Not Started",
+    topicTags: ["Array", "Breadth-First Search", "Matrix"],
+    status: "Need Review",
     description:
       "Given a grid where 0 means empty, 1 means fresh orange, and 2 means rotten orange, return the minimum number of minutes until no fresh orange remains.",
+    link: "https://leetcode.com/problems/rotting-oranges/",
+    lastSolvedAt: "2026-05-23",
+  },
+  {
+    id: 1001,
+    number: "CS-1",
+    title: "Count Key Changes",
+    difficulty: "Easy",
+    topic: "String",
+    topicTags: ["Array", "String", "Simulation"],
+    status: "Not Started",
+    description:
+      "Given an array of uppercase and lowercase English letters recording, count how many times the user changed letter keys while typing. Uppercase and lowercase versions of the same letter use the same key.",
+    descriptionHtml: `
+      <p>You are given an array of uppercase and lowercase English letters <code>recording</code>, representing a sequence of letters typed by the user.</p>
+      <p>Your task is to count the number of times that the user changed keys while typing the sequence. Uppercase and lowercase letters for the same letter require the user to press the same letter key, ignoring modifiers like Shift or Caps Lock.</p>
+      <p>For example, typing <code>'W'</code> and <code>'w'</code> uses the same key, while typing <code>'W'</code> and <code>'E'</code> or typing <code>'W'</code> and <code>'e'</code> requires changing keys.</p>
+      <h3>Examples</h3>
+      <pre>recording = ["W","w","a","A","a","b","B"]
+Output: 2
+
+recording = ["w","w","a","w","a"]
+Output: 3</pre>
+      <h3>Constraints</h3>
+      <ul>
+        <li><code>1 &lt;= recording.length &lt;= 1000</code></li>
+        <li><code>recording</code> contains only uppercase and lowercase English letters.</li>
+      </ul>
+      <h3>Return</h3>
+      <p>Return the number of key changes as an integer.</p>
+    `,
+    exampleTestcases: `["W","w","a","A","a","b","B"]
+["w","w","a","w","a"]
+["a"]
+["A","a","A"]
+["a","B","b","C","c","a"]`,
+    codeTemplates: {
+      java: `class Solution {
+    public int solution(char[] recording) {
+        
+    }
+}`,
+    },
+    language: "java",
+    link: "",
+    lastSolvedAt: "",
   },
 ];
 
-function App() {
-  const [problems, setProblems] = useState(() => {
-    const savedProblems = localStorage.getItem("problems");
+function readStoredValue(key, fallback) {
+  try {
+    const savedValue = localStorage.getItem(key);
+    return savedValue ? JSON.parse(savedValue) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
-    if (savedProblems) {
-      return JSON.parse(savedProblems);
+function getInitialProblems() {
+  const storedProblems = readStoredValue(STORAGE_KEYS.problems, null);
+  const startingProblems = Array.isArray(storedProblems)
+    ? storedProblems
+    : defaultProblems;
+  const mergedProblems = [...startingProblems];
+
+  defaultProblems.forEach((defaultProblem) => {
+    const alreadyExists = mergedProblems.some((problem) => {
+      return problem.id === defaultProblem.id || problem.title === defaultProblem.title;
+    });
+
+    if (!alreadyExists) {
+      mergedProblems.push(defaultProblem);
     }
-
-    return defaultProblems;
   });
 
-  const [selectedProblemId, setSelectedProblemId] = useState(
-    problems[0]?.id || null,
+  return mergedProblems.map(normalizeProblem);
+}
+
+function normalizeProblem(problem) {
+  const topicTags =
+    problem.topicTags?.length > 0
+      ? problem.topicTags.map((topic) => {
+          return typeof topic === "string" ? topic : topic.name;
+        })
+      : [problem.topic ?? "General"];
+  const normalizedProblem = {
+    title: problem.title ?? "",
+    description: problem.description ?? "",
+    topic: problem.topic ?? topicTags[0] ?? "General",
+  };
+
+  return {
+    id: problem.id ?? Date.now(),
+    number: problem.number ?? KNOWN_PROBLEM_NUMBERS[problem.title] ?? "",
+    title: normalizedProblem.title,
+    difficulty: problem.difficulty ?? "Easy",
+    topic: normalizedProblem.topic,
+    topicTags,
+    status: problem.status ?? "Not Started",
+    description: normalizedProblem.description,
+    descriptionHtml: problem.descriptionHtml ?? "",
+    exampleTestcases: problem.exampleTestcases ?? "",
+    titleSlug: problem.titleSlug ?? "",
+    codeTemplates:
+      Object.keys(problem.codeTemplates ?? {}).length > 0
+        ? problem.codeTemplates
+        : getGeneratedCodeTemplates(normalizedProblem),
+    language: problem.language ?? "python3",
+    lastRunResult: problem.lastRunResult ?? "",
+    runFeedback: problem.runFeedback ?? null,
+    submissionStatus: problem.submissionStatus ?? "",
+    link: problem.link ?? "",
+    lastSolvedAt: problem.lastSolvedAt ?? "",
+  };
+}
+
+function getRouteFromHash() {
+  const hashRoute = window.location.hash.replace("#/", "");
+  return ROUTES.includes(hashRoute) ? hashRoute : "track";
+}
+
+function getToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getNextProblemId(problems) {
+  return (
+    Math.max(
+      0,
+      ...problems.map((problem) => {
+        return Number(problem.id) || 0;
+      }),
+    ) + 1
   );
-  const [notes, setNotes] = useState(() => {
-    const savedNotes = localStorage.getItem("notes");
+}
 
-    if (savedNotes) {
-      return JSON.parse(savedNotes);
-    }
+function getTopicNames(problem) {
+  return problem.topicTags?.length > 0 ? problem.topicTags : [problem.topic];
+}
 
-    return {};
+function toFunctionName(title) {
+  const words = title
+    .replace(/[^a-zA-Z0-9 ]/g, " ")
+    .trim()
+    .split(/\s+/);
+
+  if (words.length === 0) {
+    return "solve";
+  }
+
+  return words
+    .map((word, index) => {
+      const normalizedWord = word.toLowerCase();
+
+      if (index === 0) {
+        return normalizedWord;
+      }
+
+      return normalizedWord.charAt(0).toUpperCase() + normalizedWord.slice(1);
+    })
+    .join("");
+}
+
+function inferParameterNames(description) {
+  const candidates = [
+    "nums",
+    "target",
+    "arr",
+    "grid",
+    "matrix",
+    "s",
+    "t",
+    "k",
+    "x",
+    "n",
+    "m",
+    "prices",
+    "intervals",
+    "root",
+    "head",
+  ];
+  const foundParameters = candidates.filter((candidate) => {
+    return new RegExp(`\\b${candidate}\\b`, "i").test(description);
   });
 
-  const [topicFilter, setTopicFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
+  return foundParameters.length > 0 ? foundParameters : ["input"];
+}
+
+function inferJavaType(parameterName) {
+  if (["nums", "arr", "prices"].includes(parameterName)) {
+    return "int[]";
+  }
+
+  if (["grid", "matrix", "intervals"].includes(parameterName)) {
+    return "int[][]";
+  }
+
+  if (["s", "t"].includes(parameterName)) {
+    return "String";
+  }
+
+  if (parameterName === "root") {
+    return "TreeNode";
+  }
+
+  if (parameterName === "head") {
+    return "ListNode";
+  }
+
+  if (["target", "k", "x", "n", "m"].includes(parameterName)) {
+    return "int";
+  }
+
+  return "Object";
+}
+
+function inferReturnTypes(description) {
+  const normalizedDescription = description.toLowerCase();
+
+  if (
+    normalizedDescription.includes("return true") ||
+    normalizedDescription.includes("return false") ||
+    normalizedDescription.includes("boolean")
+  ) {
+    return {
+      java: "boolean",
+      python: "",
+    };
+  }
+
+  if (
+    normalizedDescription.includes("return indices") ||
+    normalizedDescription.includes("return the indices") ||
+    normalizedDescription.includes("return an array") ||
+    normalizedDescription.includes("return a list")
+  ) {
+    return {
+      java: "int[]",
+      python: "List[int]",
+    };
+  }
+
+  if (
+    normalizedDescription.includes("return the index") ||
+    normalizedDescription.includes("minimum number") ||
+    normalizedDescription.includes("maximum number") ||
+    normalizedDescription.includes("return -1") ||
+    normalizedDescription.includes("return the number")
+  ) {
+    return {
+      java: "int",
+      python: "int",
+    };
+  }
+
+  return {
+    java: "Object",
+    python: "",
+  };
+}
+
+function getGeneratedCodeTemplates(problem) {
+  const functionName = toFunctionName(problem.title);
+  const parameterNames = inferParameterNames(problem.description);
+  const returnTypes = inferReturnTypes(problem.description);
+  const javaParameters = parameterNames
+    .map((parameterName) => {
+      return `${inferJavaType(parameterName)} ${parameterName}`;
+    })
+    .join(", ");
+  const pythonParameters = ["self", ...parameterNames].join(", ");
+  const python3Return = returnTypes.python ? ` -> ${returnTypes.python}` : "";
+
+  return {
+    java: `class Solution {
+    public ${returnTypes.java} ${functionName}(${javaParameters}) {
+        
+    }
+}`,
+    python: `class Solution(object):
+    def ${functionName}(${pythonParameters}):
+        """
+        :type ${parameterNames[0]}: object
+        :rtype: object
+        """
+        pass`,
+    python3: `class Solution:
+    def ${functionName}(${pythonParameters})${python3Return}:
+        pass`,
+  };
+}
+
+function getFallbackCode(problem, language) {
+  return getGeneratedCodeTemplates(problem)[language];
+}
+
+function getNoteKey(problemId, language) {
+  return `${problemId}:${language}`;
+}
+
+function getProblemDefaultCode(problem) {
+  return cleanDefaultCode(
+    problem.codeTemplates?.[problem.language] ??
+      getFallbackCode(problem, problem.language),
+  );
+}
+
+function isWrongLanguageTemplate(code, language) {
+  if (!code) {
+    return false;
+  }
+
+  const looksLikeJavaScript =
+    code.includes("@param") ||
+    /\bvar\s+\w+\s*=\s*function\b/.test(code) ||
+    /\bfunction\s+\w+\s*\(/.test(code);
+
+  if (language !== "javascript" && looksLikeJavaScript) {
+    return true;
+  }
+
+  if (language === "java" && code.includes("def ")) {
+    return true;
+  }
+
+  if (language.startsWith("python") && code.includes("public ")) {
+    return true;
+  }
+
+  return false;
+}
+
+function getProblemCode(problem, notes) {
+  const noteKey = getNoteKey(problem.id, problem.language);
+  const savedCode = notes[noteKey];
+
+  if (savedCode && !isWrongLanguageTemplate(savedCode, problem.language)) {
+    return savedCode;
+  }
+
+  return getProblemDefaultCode(problem);
+}
+
+function cleanDefaultCode(code) {
+  return code
+    .replace(/^\s*\/\/\s*TODO:.*$/gim, "")
+    .replace(/^\s*#\s*TODO:.*$/gim, "")
+    .replace(/^\s*return\s+(null|-1|false|new int\[0\]);\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function getProblemStatus(problem, notes) {
+  const code = getProblemCode(problem, notes).trim();
+  const defaultCode = getProblemDefaultCode(problem).trim();
+
+  if (problem.submissionStatus === "Accepted") {
+    return "Solved";
+  }
+
+  if (problem.lastRunResult === "Needs Review") {
+    return "Need Review";
+  }
+
+  if (code !== "" && code !== defaultCode) {
+    return "In Progress";
+  }
+
+  return "Not Started";
+}
+
+function getStatusClass(status) {
+  return status.replace(/\s+/g, "-").toLowerCase();
+}
+
+function escapeHtml(value) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function highlightPlainCode(code, language) {
+  const keywords =
+    language === "java"
+      ? new Set([
+          "class",
+          "public",
+          "private",
+          "protected",
+          "static",
+          "final",
+          "void",
+          "return",
+          "if",
+          "else",
+          "for",
+          "while",
+          "do",
+          "switch",
+          "case",
+          "break",
+          "continue",
+          "new",
+          "try",
+          "catch",
+          "throw",
+          "throws",
+          "extends",
+          "implements",
+          "import",
+          "package",
+          "true",
+          "false",
+          "null",
+        ])
+      : new Set([
+          "class",
+          "def",
+          "return",
+          "if",
+          "elif",
+          "else",
+          "for",
+          "while",
+          "in",
+          "not",
+          "and",
+          "or",
+          "is",
+          "None",
+          "True",
+          "False",
+          "from",
+          "import",
+          "pass",
+          "break",
+          "continue",
+          "lambda",
+          "with",
+          "as",
+          "try",
+          "except",
+          "finally",
+          "raise",
+        ]);
+  const types =
+    language === "java"
+      ? new Set([
+          "int",
+          "long",
+          "double",
+          "float",
+          "boolean",
+          "char",
+          "String",
+          "Object",
+          "List",
+          "ArrayList",
+          "Map",
+          "HashMap",
+          "Set",
+          "HashSet",
+          "TreeNode",
+          "ListNode",
+        ])
+      : new Set([
+          "List",
+          "Dict",
+          "Set",
+          "Tuple",
+          "Optional",
+          "int",
+          "str",
+          "bool",
+          "float",
+          "object",
+          "self",
+        ]);
+  const tokenPattern = /\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match = tokenPattern.exec(code);
+
+  while (match) {
+    const token = match[0];
+    const tokenEnd = match.index + token.length;
+    const nextCharacter = code.slice(tokenEnd).trimStart()[0];
+    let tokenClass = "";
+
+    parts.push(escapeHtml(code.slice(lastIndex, match.index)));
+
+    if (/^\d/.test(token)) {
+      tokenClass = "syntax-number";
+    } else if (keywords.has(token)) {
+      tokenClass = "syntax-keyword";
+    } else if (types.has(token)) {
+      tokenClass = "syntax-type";
+    } else if (nextCharacter === "(") {
+      tokenClass = "syntax-function";
+    }
+
+    parts.push(
+      tokenClass
+        ? `<span class="${tokenClass}">${escapeHtml(token)}</span>`
+        : escapeHtml(token),
+    );
+    lastIndex = tokenEnd;
+    match = tokenPattern.exec(code);
+  }
+
+  parts.push(escapeHtml(code.slice(lastIndex)));
+
+  return parts.join("");
+}
+
+function highlightCode(code, language) {
+  const tokenPattern =
+    language === "java"
+      ? /(\/\/.*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g
+      : /(#.*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match = tokenPattern.exec(code);
+
+  while (match) {
+    parts.push(highlightPlainCode(code.slice(lastIndex, match.index), language));
+
+    const token = match[0];
+    const isComment =
+      token.startsWith("//") ||
+      token.startsWith("/*") ||
+      token.startsWith("#");
+    parts.push(
+      `<span class="${isComment ? "syntax-comment" : "syntax-string"}">${escapeHtml(
+        token,
+      )}</span>`,
+    );
+    lastIndex = match.index + token.length;
+    match = tokenPattern.exec(code);
+  }
+
+  parts.push(highlightPlainCode(code.slice(lastIndex), language));
+
+  return parts.join("") || "\n";
+}
+
+function getTemplateParameterNames(code) {
+  const pythonMatch = code?.match(/def\s+\w+\(([^)]*)\)/);
+
+  if (pythonMatch) {
+    return pythonMatch[1]
+      .split(",")
+      .map((parameter) => {
+        return parameter.trim().split(":")[0].trim();
+      })
+      .filter((parameter) => {
+        return parameter && parameter !== "self";
+      });
+  }
+
+  const javaMatch = code?.match(/public\s+.+?\s+\w+\(([^)]*)\)/);
+
+  if (!javaMatch) {
+    return [];
+  }
+
+  return javaMatch[1]
+    .split(",")
+    .map((parameter) => {
+      const parts = parameter.trim().split(/\s+/);
+      return parts[parts.length - 1]?.replace("[]", "");
+    })
+    .filter(Boolean);
+}
+
+function getTestcaseParameterNames(problem) {
+  const templateNames = [
+    getTemplateParameterNames(problem.codeTemplates?.python3),
+    getTemplateParameterNames(problem.codeTemplates?.python),
+    getTemplateParameterNames(problem.codeTemplates?.java),
+  ].find((parameterNames) => {
+    return parameterNames.length > 0;
+  });
+
+  if (templateNames.length > 0) {
+    return templateNames;
+  }
+
+  return inferParameterNames(problem.description);
+}
+
+function getProblemTestcases(problem) {
+  const parameterNames = getTestcaseParameterNames(problem);
+  const testcaseLines = problem.exampleTestcases
+    ?.split("\n")
+    .map((line) => {
+      return line.trim();
+    })
+    .filter(Boolean);
+
+  if (!testcaseLines || testcaseLines.length === 0) {
+    return [
+      {
+        name: "Case 1",
+        fields: parameterNames.map((parameterName) => {
+          return {
+            name: parameterName,
+            value: "",
+          };
+        }),
+      },
+    ];
+  }
+
+  if (parameterNames.length === 0 || testcaseLines.length < parameterNames.length) {
+    return [
+      {
+        name: "Case 1",
+        fields: [
+          {
+            name: "input",
+            value: testcaseLines.join("\n"),
+          },
+        ],
+      },
+    ];
+  }
+
+  const testcases = [];
+
+  for (let index = 0; index < testcaseLines.length; index += parameterNames.length) {
+    const testcaseValues = testcaseLines.slice(index, index + parameterNames.length);
+
+    if (testcaseValues.length !== parameterNames.length) {
+      break;
+    }
+
+    testcases.push({
+      name: `Case ${testcases.length + 1}`,
+      fields: parameterNames.map((parameterName, parameterIndex) => {
+        return {
+          name: parameterName,
+          value: testcaseValues[parameterIndex],
+        };
+      }),
+    });
+  }
+
+  return testcases;
+}
+
+function formatCode(code) {
+  return code
+    .split("\n")
+    .map((line) => {
+      return line.replace(/\s+$/g, "");
+    })
+    .join("\n")
+    .trimEnd();
+}
+
+function getLineIndent(code, cursorIndex) {
+  const lineStart = code.lastIndexOf("\n", cursorIndex - 1) + 1;
+  const currentLine = code.slice(lineStart, cursorIndex);
+  return currentLine.match(/^\s*/)?.[0] ?? "";
+}
+
+function hasBalancedDelimiters(code) {
+  const pairs = {
+    "(": ")",
+    "[": "]",
+    "{": "}",
+  };
+  const closingPairs = new Set(Object.values(pairs));
+  const stack = [];
+  let quote = "";
+  let isEscaped = false;
+
+  for (const character of code) {
+    if (quote) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (character === "\\") {
+        isEscaped = true;
+      } else if (character === quote) {
+        quote = "";
+      }
+      continue;
+    }
+
+    if (character === "\"" || character === "'") {
+      quote = character;
+      continue;
+    }
+
+    if (pairs[character]) {
+      stack.push(pairs[character]);
+      continue;
+    }
+
+    if (closingPairs.has(character) && stack.pop() !== character) {
+      return false;
+    }
+  }
+
+  return stack.length === 0 && !quote;
+}
+
+function htmlToPlainText(html = "") {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/pre>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+  return textarea.value.replace(/\u00a0/g, " ");
+}
+
+function getExampleOutputs(problem) {
+  const sourceText = htmlToPlainText(
+    problem.descriptionHtml || problem.description || "",
+  );
+  const outputs = [];
+  const outputPattern =
+    /Output:\s*([\s\S]*?)(?=(?:Explanation:|Example\s+\d|Input:|Constraints|Follow-up|$))/gi;
+  let match = outputPattern.exec(sourceText);
+
+  while (match) {
+    outputs.push(match[1].trim().replace(/\s+/g, " "));
+    match = outputPattern.exec(sourceText);
+  }
+
+  return outputs;
+}
+
+function normalizeJudgeValue(value) {
+  const trimmedValue = String(value ?? "").trim();
+
+  if (
+    (trimmedValue.startsWith("\"") && trimmedValue.endsWith("\"")) ||
+    (trimmedValue.startsWith("'") && trimmedValue.endsWith("'"))
+  ) {
+    return trimmedValue.slice(1, -1);
+  }
+
+  return trimmedValue.replace(/\s+/g, "");
+}
+
+function getExpectedOutput(problem, testcase) {
+  if (problem.title !== "Count Key Changes") {
+    return getExampleOutputs(problem)[Number(testcase.name.replace("Case ", "")) - 1] ?? "";
+  }
+
+  const recording = testcase.fields.find((field) => {
+    return field.name === "recording";
+  })?.value;
+
+  try {
+    const letters = JSON.parse(recording);
+    return String(
+      letters.reduce((changes, letter, index) => {
+        if (index === 0) {
+          return changes;
+        }
+
+        return letters[index - 1].toLowerCase() === letter.toLowerCase()
+          ? changes
+          : changes + 1;
+      }, 0),
+    );
+  } catch {
+    return "";
+  }
+}
+
+function createRunFeedback(problem, code, testcases, mode, executionResult = null) {
+  const defaultCode = getProblemDefaultCode(problem).trim();
+  const trimmedCode = code.trim();
+  const hasMeaningfulCode = trimmedCode !== "" && trimmedCode !== defaultCode;
+  const functionName =
+    problem.language === "java"
+      ? problem.codeTemplates?.java?.match(/public\s+.+?\s+(\w+)\(/)?.[1]
+      : problem.codeTemplates?.[problem.language]?.match(/def\s+(\w+)\(/)?.[1];
+  const hasFunctionSignature = functionName ? code.includes(`${functionName}(`) : true;
+  const hasBalancedCode = hasBalancedDelimiters(code);
+
+  if (!hasMeaningfulCode) {
+    return {
+      status: "Needs Review",
+      summary: "Write code before running.",
+      cases: testcases.map((testcase) => {
+        return {
+          name: testcase.name,
+          status: "Blocked",
+          expected: getExpectedOutput(problem, testcase),
+          message: "No user code yet.",
+        };
+      }),
+    };
+  }
+
+  if (!hasFunctionSignature || !hasBalancedCode) {
+    return {
+      status: "Needs Review",
+      summary: !hasFunctionSignature
+        ? "Function signature is missing or renamed."
+        : "Check unmatched brackets or quotes before running.",
+      cases: testcases.map((testcase) => {
+        return {
+          name: testcase.name,
+          status: "Blocked",
+          expected: getExpectedOutput(problem, testcase),
+          message: "Static validation failed.",
+        };
+      }),
+    };
+  }
+
+  if (!executionResult) {
+    return {
+      status: "Needs Review",
+      summary:
+        "A local runner is not available for this problem yet. Java execution currently supports common array, string, boolean, and integer signatures.",
+      cases: testcases.map((testcase) => {
+        return {
+          name: testcase.name,
+          status: "Blocked",
+          input: testcase.fields,
+          expected: getExpectedOutput(problem, testcase),
+          actual: "",
+          message: "Runner not available.",
+        };
+      }),
+    };
+  }
+
+  if (executionResult.status !== "Ran") {
+    return {
+      status: executionResult.status,
+      summary: executionResult.summary,
+      cases: testcases.map((testcase) => {
+        return {
+          name: testcase.name,
+          status: "Blocked",
+          input: testcase.fields,
+          expected: getExpectedOutput(problem, testcase),
+          actual: executionResult.stderr ?? "",
+          message: "Code did not finish running.",
+        };
+      }),
+    };
+  }
+
+  const cases = testcases.map((testcase, index) => {
+    const output = executionResult.outputs.find((candidate) => {
+      return candidate.index === index;
+    })?.output;
+    const expected = getExpectedOutput(problem, testcase);
+    const hasExpected = expected !== "";
+    const passed = hasExpected
+      ? normalizeJudgeValue(output) === normalizeJudgeValue(expected)
+      : false;
+
+    return {
+      name: testcase.name,
+      status: hasExpected ? (passed ? "Accepted" : "Wrong Answer") : "Ran",
+      input: testcase.fields,
+      expected,
+      actual: output ?? "No output",
+      message: hasExpected
+        ? passed
+          ? "Output matched expected result."
+          : "Output differed."
+        : "No expected output was found for this case.",
+    };
+  });
+  const allPassed = cases.every((testcase) => {
+    return testcase.status === "Accepted";
+  });
+  const hasComparableCases = cases.every((testcase) => {
+    return testcase.expected !== "";
+  });
+
+  return {
+    status: hasComparableCases
+      ? allPassed
+        ? mode === "submit"
+          ? "Accepted"
+          : "Checked"
+        : "Wrong Answer"
+      : "Ran",
+    summary:
+      hasComparableCases && allPassed
+        ? `Passed ${cases.length} local testcase${cases.length === 1 ? "" : "s"}.`
+        : hasComparableCases
+          ? "One or more local testcases failed."
+          : "Code ran locally. Add expected outputs to enable pass/fail judging.",
+    cases,
+  };
+}
+
+function App() {
+  const problemMenuRef = useRef(null);
+  const topicsMenuRef = useRef(null);
+  const codeHighlightRef = useRef(null);
+  const codeLineNumbersRef = useRef(null);
+  const editorColumnRef = useRef(null);
+  const [activePage, setActivePage] = useState(getRouteFromHash);
+  const [problems, setProblems] = useState(() => {
+    return getInitialProblems();
+  });
+  const [notes, setNotes] = useState(() => {
+    return readStoredValue(STORAGE_KEYS.notes, {});
+  });
+  const [selectedProblemId, setSelectedProblemId] = useState(() => {
+    return problems[0]?.id ?? null;
+  });
+  const [isProblemMenuOpen, setIsProblemMenuOpen] = useState(false);
+  const [isTopicsMenuOpen, setIsTopicsMenuOpen] = useState(false);
+  const [activeInfoTab, setActiveInfoTab] = useState("description");
+  const [activeTestTab, setActiveTestTab] = useState("testcase");
+  const [activeCaseIndex, setActiveCaseIndex] = useState(0);
+  const [testPanelHeight, setTestPanelHeight] = useState(220);
+
   const [searchText, setSearchText] = useState("");
-  const [difficultyFilter, setDifficultyFilter] = useState("All");
-  const [newTitle, setNewTitle] = useState("");
-  const [newDifficulty, setNewDifficulty] = useState("Easy");
-  const [newTopic, setNewTopic] = useState("");
-  const [newDescription, setNewDescription] = useState("");
+  const [selectedTopic, setSelectedTopic] = useState("All");
+  const [formData, setFormData] = useState({
+    number: "",
+    title: "",
+    difficulty: "Easy",
+    topic: "",
+    description: "",
+    link: "",
+  });
+  const [importQuery, setImportQuery] = useState("");
+  const [importStatus, setImportStatus] = useState("idle");
+  const [importMessage, setImportMessage] = useState("");
 
   useEffect(() => {
-    localStorage.setItem("problems", JSON.stringify(problems));
+    function handleHashChange() {
+      setActivePage(getRouteFromHash());
+    }
+
+    window.addEventListener("hashchange", handleHashChange);
+    window.addEventListener("popstate", handleHashChange);
+
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+      window.removeEventListener("popstate", handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.problems, JSON.stringify(problems));
   }, [problems]);
 
   useEffect(() => {
-    localStorage.setItem("notes", JSON.stringify(notes));
+    localStorage.setItem(STORAGE_KEYS.notes, JSON.stringify(notes));
   }, [notes]);
+
+  useEffect(() => {
+    function handleOutsidePointerDown(event) {
+      const target = event.target;
+      const clickedProblemMenu = problemMenuRef.current?.contains(target);
+      const clickedTopicsMenu = topicsMenuRef.current?.contains(target);
+
+      if (!clickedProblemMenu) {
+        setIsProblemMenuOpen(false);
+      }
+
+      if (!clickedTopicsMenu) {
+        setIsTopicsMenuOpen(false);
+      }
+    }
+
+    function handleEscapeKey(event) {
+      if (event.key === "Escape") {
+        setIsProblemMenuOpen(false);
+        setIsTopicsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    document.addEventListener("keydown", handleEscapeKey);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, []);
 
   const selectedProblem = problems.find((problem) => {
     return problem.id === selectedProblemId;
   });
-
-  const topics = ["All"];
-
-  for (let i = 0; i < problems.length; i++) {
-    if (!topics.includes(problems[i].topic)) {
-      topics.push(problems[i].topic);
-    }
-  }
-
-  const filteredProblems = problems.filter((problem) => {
-    const matchesTopic = topicFilter === "All" || problem.topic === topicFilter;
-
-    const matchesStatus =
-      statusFilter === "All" || problem.status === statusFilter;
-
-    const matchesDifficulty =
-      difficultyFilter === "All" || problem.difficulty === difficultyFilter;
-
-    const matchesSearch = problem.title
-      .toLowerCase()
-      .includes(searchText.toLowerCase());
-
-    return matchesTopic && matchesStatus && matchesDifficulty && matchesSearch;
+  const selectedCode = selectedProblem
+    ? getProblemCode(selectedProblem, notes)
+    : "";
+  const highlightedCode = selectedProblem
+    ? highlightCode(selectedCode, selectedProblem.language)
+    : "";
+  const codeLineNumbers = selectedCode.split("\n").map((_, index) => {
+    return index + 1;
   });
+  const selectedStatus = selectedProblem
+    ? getProblemStatus(selectedProblem, notes)
+    : "Not Started";
+  const selectedTestcases = selectedProblem ? getProblemTestcases(selectedProblem) : [];
+  const activeTestcase =
+    selectedTestcases[Math.min(activeCaseIndex, selectedTestcases.length - 1)] ??
+    selectedTestcases[0];
 
-  function handleNoteChange(event) {
-    const newNote = event.target.value;
+  const topics = useMemo(() => {
+    const topicMap = new Map();
 
-    setNotes({
-      ...notes,
-      [selectedProblemId]: newNote,
+    problems.forEach((problem) => {
+      getTopicNames(problem).forEach((topic) => {
+        const currentCount = topicMap.get(topic) ?? 0;
+        topicMap.set(topic, currentCount + 1);
+      });
+    });
+
+    return Array.from(topicMap.entries())
+      .map(([name, count]) => {
+        return { name, count };
+      })
+      .sort((firstTopic, secondTopic) => {
+        return firstTopic.name.localeCompare(secondTopic.name);
+      });
+  }, [problems]);
+
+  const visibleProblems = useMemo(() => {
+    const normalizedSearch = searchText.trim().toLowerCase();
+
+    return problems
+      .filter((problem) => {
+        const matchesSearch =
+          normalizedSearch === "" ||
+          problem.title.toLowerCase().includes(normalizedSearch) ||
+          String(problem.number).includes(normalizedSearch) ||
+          getTopicNames(problem).join(" ").toLowerCase().includes(normalizedSearch) ||
+          problem.description.toLowerCase().includes(normalizedSearch);
+        const matchesTopic =
+          selectedTopic === "All" || getTopicNames(problem).includes(selectedTopic);
+
+        if (activePage === "topics") {
+          return matchesTopic;
+        }
+
+        if (activePage === "search") {
+          return matchesSearch;
+        }
+
+        return matchesSearch && matchesTopic;
+      })
+      .sort((firstProblem, secondProblem) => {
+        const firstNumber = Number(firstProblem.number);
+        const secondNumber = Number(secondProblem.number);
+
+        if (Number.isNaN(firstNumber) || Number.isNaN(secondNumber)) {
+          return firstProblem.title.localeCompare(secondProblem.title);
+        }
+
+        return firstNumber - secondNumber;
+      });
+  }, [activePage, problems, searchText, selectedTopic]);
+
+  function navigateTo(page) {
+    window.history.pushState(null, "", `#/${page}`);
+    setActivePage(page);
+  }
+
+  function updateFormData(field, value) {
+    setFormData({
+      ...formData,
+      [field]: value,
     });
   }
 
-  function handleStatusChange(newStatus) {
-    const updatedProblems = problems.map((problem) => {
-      if (problem.id === selectedProblemId) {
-        return {
-          ...problem,
-          status: newStatus,
-        };
-      }
-
-      return problem;
-    });
-
-    setProblems(updatedProblems);
-  }
-
-  function handleDeleteProblem() {
+  function updateSelectedProblem(field, value) {
     if (!selectedProblem) {
       return;
     }
 
-    const updatedProblems = problems.filter((problem) => {
-      return problem.id !== selectedProblemId;
+    setProblems((currentProblems) => {
+      return currentProblems.map((problem) => {
+        if (problem.id !== selectedProblemId) {
+          return problem;
+        }
+
+        if (typeof field === "object") {
+          return {
+            ...problem,
+            ...field,
+          };
+        }
+
+        return {
+          ...problem,
+          [field]: value,
+        };
+      });
+    });
+  }
+
+  function handleNoteChange(event) {
+    if (!selectedProblem) {
+      return;
+    }
+
+    updateSelectedCode(event.target.value);
+  }
+
+  function updateSelectedCode(nextCode) {
+    if (!selectedProblem) {
+      return;
+    }
+
+    setNotes((currentNotes) => {
+      return {
+        ...currentNotes,
+        [getNoteKey(selectedProblemId, selectedProblem.language)]: nextCode,
+      };
     });
 
-    const updateNotes = { ...notes };
-    delete updateNotes[selectedProblemId];
+    updateSelectedProblem({
+      submissionStatus: "",
+      runFeedback: null,
+      lastRunResult: "",
+    });
+  }
 
-    setProblems(updatedProblems);
-    setNotes(updatedNotes);
+  function handleCodeKeyDown(event) {
+    const textarea = event.currentTarget;
+    const selectionStart = textarea.selectionStart;
+    const selectionEnd = textarea.selectionEnd;
+    const selectedText = selectedCode.slice(selectionStart, selectionEnd);
 
-    if (updatedProblems.length > 0) {
-      setSelectedProblemId(updatedProblems[0].id);
-    } else {
-      setSelectedProblemId(null);
+    function applyCodeEdit(nextCode, nextSelectionStart, nextSelectionEnd) {
+      updateSelectedCode(nextCode);
+      requestAnimationFrame(() => {
+        textarea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+      });
     }
+
+    if (event.key === "Tab") {
+      event.preventDefault();
+
+      const indentation = "    ";
+
+      if (selectionStart !== selectionEnd) {
+        const lineStart = selectedCode.lastIndexOf("\n", selectionStart - 1) + 1;
+        const selectedBlock = selectedCode.slice(lineStart, selectionEnd);
+
+        if (event.shiftKey) {
+          const outdentedBlock = selectedBlock.replace(/^ {1,4}/gm, "");
+          const removedCharacters = selectedBlock.length - outdentedBlock.length;
+          applyCodeEdit(
+            `${selectedCode.slice(0, lineStart)}${outdentedBlock}${selectedCode.slice(
+              selectionEnd,
+            )}`,
+            Math.max(lineStart, selectionStart - indentation.length),
+            Math.max(lineStart, selectionEnd - removedCharacters),
+          );
+          return;
+        }
+
+        const indentedBlock = selectedBlock.replace(/^/gm, indentation);
+        const addedLines = selectedBlock.split("\n").length;
+        applyCodeEdit(
+          `${selectedCode.slice(0, lineStart)}${indentedBlock}${selectedCode.slice(
+            selectionEnd,
+          )}`,
+          selectionStart + indentation.length,
+          selectionEnd + addedLines * indentation.length,
+        );
+        return;
+      }
+
+      if (event.shiftKey) {
+        return;
+      }
+
+      applyCodeEdit(
+        `${selectedCode.slice(0, selectionStart)}${indentation}${selectedCode.slice(
+          selectionEnd,
+        )}`,
+        selectionStart + indentation.length,
+        selectionStart + indentation.length,
+      );
+      return;
+    }
+
+    const pairs = {
+      "(": ")",
+      "[": "]",
+      "{": "}",
+      "\"": "\"",
+      "'": "'",
+    };
+    const closingCharacters = new Set(Object.values(pairs));
+
+    if (pairs[event.key]) {
+      event.preventDefault();
+
+      const closingCharacter = pairs[event.key];
+
+      if (
+        selectionStart === selectionEnd &&
+        (event.key === "\"" || event.key === "'") &&
+        selectedCode[selectionStart] === closingCharacter
+      ) {
+        applyCodeEdit(selectedCode, selectionStart + 1, selectionStart + 1);
+        return;
+      }
+
+      applyCodeEdit(
+        `${selectedCode.slice(0, selectionStart)}${event.key}${selectedText}${closingCharacter}${selectedCode.slice(
+          selectionEnd,
+        )}`,
+        selectionStart + 1,
+        selectionEnd + 1,
+      );
+      return;
+    }
+
+    if (
+      closingCharacters.has(event.key) &&
+      selectionStart === selectionEnd &&
+      selectedCode[selectionStart] === event.key
+    ) {
+      event.preventDefault();
+      applyCodeEdit(selectedCode, selectionStart + 1, selectionStart + 1);
+      return;
+    }
+
+    if (event.key === "Backspace" && selectionStart === selectionEnd) {
+      const previousCharacter = selectedCode[selectionStart - 1];
+      const nextCharacter = selectedCode[selectionStart];
+
+      if (pairs[previousCharacter] === nextCharacter) {
+        event.preventDefault();
+        applyCodeEdit(
+          `${selectedCode.slice(0, selectionStart - 1)}${selectedCode.slice(
+            selectionStart + 1,
+          )}`,
+          selectionStart - 1,
+          selectionStart - 1,
+        );
+      }
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      const indentation = getLineIndent(selectedCode, selectionStart);
+      const previousCharacter = selectedCode[selectionStart - 1];
+      const nextCharacter = selectedCode[selectionStart];
+
+      if (previousCharacter === "{" && nextCharacter === "}") {
+        const innerIndentation = `${indentation}    `;
+        const insertion = `\n${innerIndentation}\n${indentation}`;
+        applyCodeEdit(
+          `${selectedCode.slice(0, selectionStart)}${insertion}${selectedCode.slice(
+            selectionEnd,
+          )}`,
+          selectionStart + innerIndentation.length + 1,
+          selectionStart + innerIndentation.length + 1,
+        );
+        return;
+      }
+
+      const insertion = `\n${indentation}`;
+      applyCodeEdit(
+        `${selectedCode.slice(0, selectionStart)}${insertion}${selectedCode.slice(
+          selectionEnd,
+        )}`,
+        selectionStart + insertion.length,
+        selectionStart + insertion.length,
+      );
+    }
+  }
+
+  function handleCodeScroll(event) {
+    if (codeHighlightRef.current) {
+      codeHighlightRef.current.scrollTop = event.currentTarget.scrollTop;
+      codeHighlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+    }
+
+    if (codeLineNumbersRef.current) {
+      codeLineNumbersRef.current.scrollTop = event.currentTarget.scrollTop;
+    }
+  }
+
+  function handleTestPanelResizeStart(event) {
+    event.preventDefault();
+    const editorColumn = editorColumnRef.current;
+
+    if (!editorColumn) {
+      return;
+    }
+
+    const editorBounds = editorColumn.getBoundingClientRect();
+
+    function handlePointerMove(pointerEvent) {
+      const nextHeight = editorBounds.bottom - pointerEvent.clientY;
+      const maxHeight = Math.max(180, editorBounds.height - 220);
+      setTestPanelHeight(Math.min(Math.max(nextHeight, 150), maxHeight));
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function handleLanguageChange(language) {
+    updateSelectedProblem("language", language);
+  }
+
+  async function runSelectedCode(mode) {
+    if (!selectedProblem) {
+      return null;
+    }
+
+    const supportsLocalJavaRunner = selectedProblem.language === "java";
+
+    if (!supportsLocalJavaRunner) {
+      return null;
+    }
+
+    const response = await fetch("/api/run/java", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        code: selectedCode,
+        testcases: selectedTestcases,
+        mode,
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => {
+        return {};
+      });
+      return {
+        status: "Runtime Error",
+        summary: payload.error ?? "Unable to run code locally.",
+        outputs: [],
+      };
+    }
+
+    return response.json();
+  }
+
+  async function handleRunCode() {
+    if (!selectedProblem) {
+      return;
+    }
+
+    const hasMeaningfulCode =
+      selectedCode.trim() !== "" &&
+      selectedCode.trim() !== getProblemDefaultCode(selectedProblem).trim();
+    const executionResult = hasMeaningfulCode
+      ? await runSelectedCode("run")
+      : null;
+    const feedback = createRunFeedback(
+      selectedProblem,
+      selectedCode,
+      selectedTestcases,
+      "run",
+      executionResult,
+    );
+
+    updateSelectedProblem({
+      lastRunResult: hasMeaningfulCode ? feedback.status : "Needs Review",
+      runFeedback: feedback,
+    });
+    setActiveTestTab("result");
+  }
+
+  async function handleSubmitCode() {
+    if (!selectedProblem) {
+      return;
+    }
+
+    const hasMeaningfulCode =
+      selectedCode.trim() !== "" &&
+      selectedCode.trim() !== getProblemDefaultCode(selectedProblem).trim();
+    const executionResult = hasMeaningfulCode
+      ? await runSelectedCode("submit")
+      : null;
+    const feedback = createRunFeedback(
+      selectedProblem,
+      selectedCode,
+      selectedTestcases,
+      "submit",
+      executionResult,
+    );
+    const isAccepted = hasMeaningfulCode && feedback.status === "Accepted";
+
+    setProblems((currentProblems) => {
+      return currentProblems.map((problem) => {
+        if (problem.id !== selectedProblemId) {
+          return problem;
+        }
+
+        return {
+          ...problem,
+          lastRunResult: feedback.status,
+          runFeedback: feedback,
+          submissionStatus: isAccepted ? "Accepted" : "",
+          lastSolvedAt: isAccepted ? getToday() : problem.lastSolvedAt,
+        };
+      });
+    });
+    setActiveTestTab("result");
+  }
+
+  function handleResetCode() {
+    if (!selectedProblem) {
+      return;
+    }
+
+    setNotes({
+      ...notes,
+      [getNoteKey(selectedProblemId, selectedProblem.language)]:
+        getProblemDefaultCode(selectedProblem),
+    });
+
+    setProblems((currentProblems) => {
+      return currentProblems.map((problem) => {
+        if (problem.id !== selectedProblemId) {
+          return problem;
+        }
+
+        return {
+          ...problem,
+          lastRunResult: "",
+          runFeedback: null,
+          submissionStatus: "",
+        };
+      });
+    });
+  }
+
+  function handleFormatCode() {
+    if (!selectedProblem) {
+      return;
+    }
+
+    setNotes({
+      ...notes,
+      [getNoteKey(selectedProblemId, selectedProblem.language)]: formatCode(
+        selectedCode,
+      ),
+    });
   }
 
   function handleAddProblem(event) {
     event.preventDefault();
 
     if (
-      newTitle.trim() === "" ||
-      newTopic.trim() === "" ||
-      newDescription.trim() === ""
+      formData.title.trim() === "" ||
+      formData.topic.trim() === "" ||
+      formData.description.trim() === ""
     ) {
       return;
     }
 
+    const nextProblemId = getNextProblemId(problems);
+    const generatedTemplates = getGeneratedCodeTemplates({
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      topic: formData.topic.trim(),
+    });
+
     const newProblem = {
-      id: Date.now(),
-      title: newTitle,
-      difficulty: newDifficulty,
-      topic: newTopic,
+      id: nextProblemId,
+      number: formData.number.trim(),
+      title: formData.title.trim(),
+      difficulty: formData.difficulty,
+      topic: formData.topic.trim(),
+      topicTags: formData.topic
+        .split(",")
+        .map((topic) => {
+          return topic.trim();
+        })
+        .filter(Boolean),
       status: "Not Started",
-      description: newDescription,
+      description: formData.description.trim(),
+      descriptionHtml: "",
+      exampleTestcases: "",
+      titleSlug: "",
+      codeTemplates: generatedTemplates,
+      language: "python3",
+      lastRunResult: "",
+      submissionStatus: "",
+      link: formData.link.trim(),
+      lastSolvedAt: "",
     };
 
-    const updatedProblems = [...problems, newProblem];
-
-    setProblems(updatedProblems);
+    setProblems((currentProblems) => {
+      return [...currentProblems, newProblem];
+    });
     setSelectedProblemId(newProblem.id);
+    setActiveCaseIndex(0);
+    setActiveTestTab("testcase");
+    setSelectedTopic("All");
+    setFormData({
+      number: "",
+      title: "",
+      difficulty: "Easy",
+      topic: "",
+      description: "",
+      link: "",
+    });
+    navigateTo("track");
+  }
 
-    setNewTitle("");
-    setNewDifficulty("Easy");
-    setNewTopic("");
-    setNewDescription("");
+  async function handleImportProblem(event) {
+    event.preventDefault();
+
+    const query = importQuery.trim();
+
+    if (query === "") {
+      return;
+    }
+
+    setImportStatus("loading");
+    setImportMessage("");
+
+    try {
+      const response = await fetch(
+        `/api/leetcode/problem?query=${encodeURIComponent(query)}`,
+      );
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to import this problem.");
+      }
+
+      const importedTopicTags =
+        payload.topicTags?.map((topic) => {
+          return topic.name;
+        }) ?? [];
+      const importedBaseProblem = {
+        title: payload.title,
+        description: payload.description,
+        topic: importedTopicTags[0] ?? "General",
+      };
+      const importedCodeTemplates = {
+        ...getGeneratedCodeTemplates(importedBaseProblem),
+        ...Object.fromEntries(
+          (payload.codeSnippets ?? [])
+            .filter((snippet) => {
+              return ["java", "python", "python3"].includes(snippet.langSlug);
+            })
+            .map((snippet) => {
+              return [snippet.langSlug, snippet.code];
+            }),
+        ),
+      };
+      const importedProblem = {
+        id: getNextProblemId(problems),
+        number: payload.questionFrontendId,
+        title: payload.title,
+        difficulty: payload.difficulty,
+        topic: importedBaseProblem.topic,
+        topicTags: importedTopicTags,
+        status: "Not Started",
+        description: payload.description,
+        descriptionHtml: payload.content,
+        exampleTestcases: payload.exampleTestcases || payload.sampleTestCase || "",
+        titleSlug: payload.titleSlug,
+        codeTemplates: importedCodeTemplates,
+        language: "python3",
+        lastRunResult: "",
+        submissionStatus: "",
+        link: `https://leetcode.com/problems/${payload.titleSlug}/`,
+        lastSolvedAt: "",
+      };
+      const initialCode =
+        payload.codeSnippets?.find((snippet) => {
+          return snippet.langSlug === "python3";
+        })?.code ??
+        payload.codeSnippets?.find((snippet) => {
+          return snippet.langSlug === "python";
+        })?.code ??
+        "";
+
+      setProblems((currentProblems) => {
+        return [...currentProblems, importedProblem];
+      });
+
+      if (initialCode) {
+        setNotes((currentNotes) => {
+          return {
+            ...currentNotes,
+            [getNoteKey(importedProblem.id, importedProblem.language)]: initialCode,
+          };
+        });
+      }
+
+      setSelectedProblemId(importedProblem.id);
+      setActiveCaseIndex(0);
+      setActiveTestTab("testcase");
+      setSelectedTopic("All");
+      setImportQuery("");
+      setImportStatus("success");
+      setImportMessage(`Imported ${importedProblem.number}. ${importedProblem.title}`);
+      navigateTo("track");
+    } catch (error) {
+      setImportStatus("error");
+      setImportMessage(error.message);
+    }
+  }
+
+  function handleSearchChange(event) {
+    setSearchText(event.target.value);
+
+    if (activePage !== "search") {
+      navigateTo("search");
+    }
+  }
+
+  function handleTopicClick(topicName) {
+    setSelectedTopic(topicName);
+    setIsTopicsMenuOpen(false);
+    navigateTo("track");
+  }
+
+  function handleProblemSelect(problemId) {
+    setSelectedProblemId(problemId);
+    setActiveCaseIndex(0);
+    setActiveTestTab("testcase");
+    setIsProblemMenuOpen(false);
+    navigateTo("track");
   }
 
   return (
-    <div className="app">
-      <div className="sidebar">
-        <h2>LeetCode Tracker</h2>
-
-        <div className="filter-box">
-          <label>Search Problem</label>
-          <input
-            placeholder="Search by title..."
-            value={searchText}
-            onChange={(event) => {
-              setSearchText(event.target.value);
-            }}
-          />
-        </div>
-
-        <div className="filter-box">
-          <label>Topic Filter</label>
-          <select
-            value={topicFilter}
-            onChange={(event) => {
-              setTopicFilter(event.target.value);
+    <main className="app-shell">
+      <header className="top-nav">
+        <div className="nav-left">
+          <button
+            className="brand-mark"
+            type="button"
+            aria-label="Home"
+            onClick={() => {
+              navigateTo("track");
             }}
           >
-            {topics.map((topic) => {
-              return (
-                <option key={topic} value={topic}>
-                  {topic}
-                </option>
-              );
-            })}
-          </select>
-        </div>
+            LC
+          </button>
 
-        <div className="filter-box">
-          <lable>Status Filter</lable>
-          <select
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value);
-            }}
-          >
-            <option value="All">All</option>
-            <option value="Not Started">Not Started</option>
-            <option value="Solved">Solved</option>
-            <option value="Need Review">Need Review</option>
-          </select>
-        </div>
+          <div className="problem-menu-wrap" ref={problemMenuRef}>
+            <button
+              className={
+                isProblemMenuOpen
+                  ? "problem-menu-button active"
+                  : "problem-menu-button"
+              }
+              type="button"
+              aria-expanded={isProblemMenuOpen}
+              onClick={() => {
+                setIsProblemMenuOpen(!isProblemMenuOpen);
+                setIsTopicsMenuOpen(false);
+              }}
+            >
+              <span className="hamburger-icon" aria-hidden="true" />
+              Problem List
+            </button>
 
-        <div className="filter-box">
-          <label>Difficulty Filter</label>
-          <select
-            value={difficultyFilter}
-            onChange={(event) => {
-              setDifficultyFilter(event.target.value);
-            }}
-          >
-            <option value="All">All</option>
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-          </select>
-        </div>
+            {isProblemMenuOpen ? (
+              <div className="problem-menu" role="menu">
+                <label className="menu-search-box">
+                  <span className="search-icon" aria-hidden="true" />
+                  <input
+                    aria-label="Search problems"
+                    placeholder="Search"
+                    value={searchText}
+                    onChange={handleSearchChange}
+                  />
+                </label>
 
-        <div className="problem-list">
-          {filteredProblems.length === 0 ? (
-            <p className="empty-text">No problems found.</p>
-          ) : (
-            filteredProblems.map((problem) => {
-              return (
-                <button
-                  key={problem.id}
-                  className={
-                    problem.id === selectedProblemId
-                      ? "problem-card active"
-                      : "problem-card"
-                  }
-                  onClick={() => {
-                    setSelectedProblemId(problem.id);
-                  }}
-                >
-                  <div className="problem-title">{problem.title}</div>
-
-                  <div className="problem-meta">
-                    <span>{problem.difficult}</span>
-                    <span>{problem.topic}</span>
-                  </div>
-
-                  <div className="status-text">{problem.status}</div>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        <form className="add-form" onSubmit={handleAddProblem}>
-          <h3>Add Problem</h3>
-
-          <input
-            placeholder="Problem title"
-            value={newTitle}
-            onChange={(event) => {
-              setNewTitle(event.target.value);
-            }}
-          />
-
-          <select
-            value={newDifficulty}
-            onChange={(event) => {
-              setNewDifficulty(event.target.value);
-            }}
-          >
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-          </select>
-
-          <input
-            placeholder="Topic"
-            value={newTopic}
-            onChange={(event) => {
-              setNewTopic(event.target.value);
-            }}
-          />
-
-          <textarea
-            placeholder="Problem description"
-            value={newDescription}
-            onChange={(event) => {
-              setNewDescription(event.target.value);
-            }}
-          />
-
-          <button type="submit">Add</button>
-        </form>
-      </div>
-
-      <div className="content">
-        {selectedProblem ? (
-          <>
-            <div className="problem-panel">
-              <div className="problem-header">
-                <div>
-                  <h1>{selectedProblem.title}</h1>
-
-                  <div>
-                    <span className="tag">{selectedProblem.difficult}</span>
-                    <span className="tag">{selectedProblem.topic}</span>
-                    <span className="tag">{selectedProblem.status}</span>
-                  </div>
+                <div className="problem-menu-header">
+                  <span>#</span>
+                  <span>Title</span>
+                  <span>Difficulty</span>
+                  <span>Topic</span>
                 </div>
 
-                <button className="delete-button" onClick={handleDeleteProblem}>
-                  Delete
+                <div className="problem-menu-list">
+                  {visibleProblems.length === 0 ? (
+                    <p className="empty-text">No problems found.</p>
+                  ) : (
+                    visibleProblems.map((problem) => {
+                      return (
+                        <button
+                          key={problem.id}
+                          className={
+                            problem.id === selectedProblemId
+                              ? "problem-menu-row active"
+                              : "problem-menu-row"
+                          }
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            handleProblemSelect(problem.id);
+                          }}
+                        >
+                          <span>{problem.number || problem.id}</span>
+                          <strong>{problem.title}</strong>
+                          <span className={`difficulty-pill ${problem.difficulty}`}>
+                            {problem.difficulty}
+                          </span>
+                          <span className="topic-cell">
+                            {getTopicNames(problem).join(", ")}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {selectedProblem ? (
+          <div className="top-run-actions">
+            <button
+              className="play-button"
+              type="button"
+              aria-label="Run Code"
+              title="Run Code"
+              onClick={handleRunCode}
+            >
+              <span className="play-icon" aria-hidden="true" />
+            </button>
+            <button className="primary-button" type="button" onClick={handleSubmitCode}>
+              Submit
+            </button>
+          </div>
+        ) : null}
+
+        <nav className="nav-actions" aria-label="Primary">
+          <button
+            className={activePage === "track" ? "text-button active" : "text-button"}
+            type="button"
+            onClick={() => {
+              setSelectedTopic("All");
+              navigateTo("track");
+            }}
+          >
+            Track
+          </button>
+
+          <div className="topics-menu-wrap" ref={topicsMenuRef}>
+            <button
+              className={
+                isTopicsMenuOpen || selectedTopic !== "All"
+                  ? "text-button active"
+                  : "text-button"
+              }
+              type="button"
+              aria-expanded={isTopicsMenuOpen}
+              onClick={() => {
+                setIsTopicsMenuOpen(!isTopicsMenuOpen);
+                setIsProblemMenuOpen(false);
+              }}
+            >
+              Topics
+            </button>
+
+            {isTopicsMenuOpen ? (
+              <div className="topics-menu">
+                <button
+                  className={
+                    selectedTopic === "All"
+                      ? "topic-menu-item active"
+                      : "topic-menu-item"
+                  }
+                  type="button"
+                  onClick={() => {
+                    handleTopicClick("All");
+                  }}
+                >
+                  <span>All</span>
+                  <small>{problems.length}</small>
+                </button>
+
+                {topics.map((topic) => {
+                  return (
+                    <button
+                      key={topic.name}
+                      className={
+                        selectedTopic === topic.name
+                          ? "topic-menu-item active"
+                          : "topic-menu-item"
+                      }
+                      type="button"
+                      onClick={() => {
+                        handleTopicClick(topic.name);
+                      }}
+                    >
+                      <span>{topic.name}</span>
+                      <small>{topic.count}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          <button
+            className={activePage === "add" ? "text-button active" : "text-button"}
+            type="button"
+            onClick={() => {
+              navigateTo("add");
+            }}
+          >
+            Add Problems
+          </button>
+        </nav>
+      </header>
+
+      <section className="page-body">
+        {activePage === "add" ? (
+          <section className="add-page">
+            <div className="page-heading">
+              <p className="eyebrow">Backlog</p>
+              <h1>Add Problems</h1>
+            </div>
+
+            <form className="import-panel panel" onSubmit={handleImportProblem}>
+              <div>
+                <p className="eyebrow">LeetCode Import</p>
+                <h2>Import by problem number or title slug</h2>
+              </div>
+
+              <div className="import-row">
+                <input
+                  aria-label="LeetCode problem number or slug"
+                  placeholder="two-sum or 1"
+                  value={importQuery}
+                  onChange={(event) => {
+                    setImportQuery(event.target.value);
+                  }}
+                />
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={importStatus === "loading"}
+                >
+                  {importStatus === "loading" ? "Importing..." : "Import"}
                 </button>
               </div>
 
-              <p>{selectedProblem.description}</p>
-              <div className="status-box">
-                <label>Update Status</label>
-                <select
-                  value={selectedProblem.status}
-                  onChange={(event) => {
-                    handleStatusChange(event.target.value);
-                  }}
+              {importMessage ? (
+                <p
+                  className={
+                    importStatus === "error"
+                      ? "import-message error"
+                      : "import-message"
+                  }
                 >
-                  <option value="Not Started">Not Started</option>
-                  <option value="Solved">Solved</option>
-                  <option value="Need Review">Need Review</option>
-                </select>
+                  {importMessage}
+                </p>
+              ) : null}
+            </form>
+
+            <form className="add-form panel" onSubmit={handleAddProblem}>
+              <div className="edit-grid">
+                <div className="field">
+                  <label htmlFor="new-number">Problem number</label>
+                  <input
+                    id="new-number"
+                    inputMode="numeric"
+                    placeholder="e.g. 20"
+                    value={formData.number}
+                    onChange={(event) => {
+                      updateFormData("number", event.target.value);
+                    }}
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="new-title">Title</label>
+                  <input
+                    id="new-title"
+                    placeholder="e.g. Valid Parentheses"
+                    value={formData.title}
+                    onChange={(event) => {
+                      updateFormData("title", event.target.value);
+                    }}
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="new-difficulty">Difficulty</label>
+                  <select
+                    id="new-difficulty"
+                    value={formData.difficulty}
+                    onChange={(event) => {
+                      updateFormData("difficulty", event.target.value);
+                    }}
+                  >
+                    {DIFFICULTY_OPTIONS.map((difficulty) => {
+                      return (
+                        <option key={difficulty} value={difficulty}>
+                          {difficulty}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label htmlFor="new-topic">Topic</label>
+                  <input
+                    id="new-topic"
+                    placeholder="Stack, Dynamic Programming, Graph..."
+                    value={formData.topic}
+                    onChange={(event) => {
+                      updateFormData("topic", event.target.value);
+                    }}
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="new-link">LeetCode link</label>
+                  <input
+                    id="new-link"
+                    placeholder="Optional"
+                    value={formData.link}
+                    onChange={(event) => {
+                      updateFormData("link", event.target.value);
+                    }}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="answer-panel">
-              <h2>My Notes / Solution</h2>
+              <div className="field">
+                <label htmlFor="new-description">Description</label>
+                <textarea
+                  id="new-description"
+                  placeholder="Paste the problem statement summary here"
+                  value={formData.description}
+                  onChange={(event) => {
+                    updateFormData("description", event.target.value);
+                  }}
+                />
+              </div>
 
-              <textarea
-                className="note-box"
-                value={notes[selectedProblemId] || ""}
-                onChange={handleNoteChange}
-                placeholder="Write your idea, code, time complexity, mistakes, or summary here..."
-              />
-            </div>
-          </>
+              <button className="primary-button" type="submit">
+                Add problem
+              </button>
+            </form>
+          </section>
         ) : (
-          <p>No problem selected.</p>
+          <>
+            <section className="solver-layout">
+              <section className="description-pane">
+                {selectedProblem ? (
+                  <>
+                    <div className="description-tabs">
+                      <button
+                        className={
+                          activeInfoTab === "description" ? "tab active" : "tab"
+                        }
+                        type="button"
+                        onClick={() => {
+                          setActiveInfoTab("description");
+                        }}
+                      >
+                        Description
+                      </button>
+                      <button
+                        className={
+                          activeInfoTab === "submissions" ? "tab active" : "tab"
+                        }
+                        type="button"
+                        onClick={() => {
+                          setActiveInfoTab("submissions");
+                        }}
+                      >
+                        Submissions
+                      </button>
+                    </div>
+
+                    <article className="problem-description">
+                      {activeInfoTab === "description" ? (
+                        <>
+                          <div>
+                            <div className="description-heading">
+                              <h1>
+                                {selectedProblem.number || selectedProblem.id}.{" "}
+                                {selectedProblem.title}
+                              </h1>
+                              {selectedStatus === "Solved" ? (
+                                <span
+                                  className={`status-chip ${getStatusClass(
+                                    selectedStatus,
+                                  )}`}
+                                >
+                                  {selectedStatus}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div className="description-tags">
+                              <span
+                                className={`difficulty-pill ${selectedProblem.difficulty}`}
+                              >
+                                {selectedProblem.difficulty}
+                              </span>
+                              {getTopicNames(selectedProblem).map((topic) => {
+                                return (
+                                  <span className="description-tag" key={topic}>
+                                    {topic}
+                                  </span>
+                                );
+                              })}
+                              {selectedProblem.link ? (
+                                <a
+                                  className="description-tag"
+                                  href={selectedProblem.link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  LeetCode
+                                </a>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {selectedProblem.descriptionHtml ? (
+                            <div
+                              className="leetcode-content"
+                              dangerouslySetInnerHTML={{
+                                __html: selectedProblem.descriptionHtml,
+                              }}
+                            />
+                          ) : (
+                            <p>{selectedProblem.description}</p>
+                          )}
+
+                          <section className="example-block">
+                            <h2>Example Testcases</h2>
+                            <pre>
+                              {selectedProblem.exampleTestcases ||
+                                `Input: your test case here
+Output: expected result here`}
+                            </pre>
+                          </section>
+                        </>
+                      ) : (
+                        <section className="submission-panel">
+                          <h2>Submission Status</h2>
+                          <div className="submission-row">
+                            <span>Status</span>
+                            <strong>{selectedStatus}</strong>
+                          </div>
+                          <div className="submission-row">
+                            <span>Last run</span>
+                            <strong>
+                              {selectedProblem.lastRunResult || "No runs yet"}
+                            </strong>
+                          </div>
+                          <div className="submission-row">
+                            <span>Submitted</span>
+                            <strong>
+                              {selectedProblem.submissionStatus || "Not submitted"}
+                            </strong>
+                          </div>
+                          <div className="submission-row">
+                            <span>Last solved</span>
+                            <strong>{selectedProblem.lastSolvedAt || "Not yet"}</strong>
+                          </div>
+                        </section>
+                      )}
+                    </article>
+                  </>
+                ) : (
+                  <div className="empty-code">
+                    <p>No problem selected.</p>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => {
+                        navigateTo("add");
+                      }}
+                    >
+                      Add problem
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <section
+                className="editor-column"
+                ref={editorColumnRef}
+                style={{
+                  gridTemplateRows: `minmax(0, 1fr) 8px ${testPanelHeight}px`,
+                }}
+              >
+                {selectedProblem ? (
+                  <>
+                    <section className="code-pane">
+                      <div className="code-toolbar">
+                        <span className="code-tab-label">Code</span>
+                      </div>
+
+                      <div className="language-bar">
+                        <select
+                          aria-label="Language"
+                          className="language-select"
+                          value={selectedProblem.language}
+                          onChange={(event) => {
+                            handleLanguageChange(event.target.value);
+                          }}
+                        >
+                          {LANGUAGE_OPTIONS.map((language) => {
+                            return (
+                              <option key={language.slug} value={language.slug}>
+                                {language.label}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <div className="language-tools">
+                          <button
+                            className="editor-icon-button"
+                            type="button"
+                            aria-label="Format code"
+                            title="Format code"
+                            onClick={handleFormatCode}
+                          >
+                            <svg
+                              className="toolbar-svg-icon"
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M4 6h16" />
+                              <path d="M4 12h16" />
+                              <path d="M4 18h11" />
+                            </svg>
+                          </button>
+                          <button
+                            className="editor-icon-button"
+                            type="button"
+                            aria-label="Reset code"
+                            title="Reset code"
+                            onClick={handleResetCode}
+                          >
+                            <svg
+                              className="toolbar-svg-icon"
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M9 4 4 9l5 5" />
+                              <path d="M4 9h10a6 6 0 0 1 0 12h-1" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="code-editor-shell">
+                        <div
+                          className="code-line-numbers"
+                          ref={codeLineNumbersRef}
+                          aria-hidden="true"
+                        >
+                          {codeLineNumbers.map((lineNumber) => {
+                            return <span key={lineNumber}>{lineNumber}</span>;
+                          })}
+                        </div>
+                        <pre
+                          className="code-highlight"
+                          ref={codeHighlightRef}
+                          aria-hidden="true"
+                        >
+                          <code
+                            dangerouslySetInnerHTML={{
+                              __html: highlightedCode,
+                            }}
+                          />
+                        </pre>
+                        <textarea
+                          className="code-editor"
+                          value={selectedCode}
+                          onChange={handleNoteChange}
+                          onKeyDown={handleCodeKeyDown}
+                          onScroll={handleCodeScroll}
+                          spellCheck="false"
+                          autoCapitalize="off"
+                          autoComplete="off"
+                          wrap="off"
+                          placeholder="Write code, pseudocode, edge cases, time complexity, and review notes here..."
+                        />
+                      </div>
+
+                    </section>
+
+                    <button
+                      className="panel-resizer"
+                      type="button"
+                      aria-label="Resize test panel"
+                      onPointerDown={handleTestPanelResizeStart}
+                    />
+
+                    <section className="test-pane">
+                      <div className="test-tabs">
+                        <button
+                          className={activeTestTab === "testcase" ? "tab active" : "tab"}
+                          type="button"
+                          onClick={() => {
+                            setActiveTestTab("testcase");
+                          }}
+                        >
+                          <svg
+                            className="test-tab-icon"
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M5 12.5 9 16.5 19 6.5" />
+                          </svg>
+                          Testcase
+                        </button>
+                        <button
+                          className={activeTestTab === "result" ? "tab active" : "tab"}
+                          type="button"
+                          onClick={() => {
+                            setActiveTestTab("result");
+                          }}
+                        >
+                          <svg
+                            className="test-tab-icon result"
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="m8 5 7 7-7 7" />
+                            <path d="M15 19h5" />
+                          </svg>
+                          Test Result
+                        </button>
+                      </div>
+                      {activeTestTab === "testcase" ? (
+                        <div className="testcase-content">
+                          <div className="case-tabs" aria-label="Test cases">
+                            {selectedTestcases.map((testcase, testcaseIndex) => {
+                              return (
+                                <button
+                                  key={testcase.name}
+                                  className={
+                                    testcaseIndex === activeCaseIndex
+                                      ? "case-tab active"
+                                      : "case-tab"
+                                  }
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveCaseIndex(testcaseIndex);
+                                  }}
+                                >
+                                  {testcase.name}
+                                </button>
+                              );
+                            })}
+                            <button
+                              className="case-add-button"
+                              type="button"
+                              aria-label="Add testcase"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          <div className="case-fields">
+                            {activeTestcase?.fields.map((field) => {
+                              return (
+                                <label className="case-field" key={field.name}>
+                                  <span>{field.name} =</span>
+                                  <textarea readOnly value={field.value} />
+                                </label>
+                              );
+                            })}
+                          </div>
+
+                          <div className="case-source">
+                            <svg
+                              className="source-icon"
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="m9 18-6-6 6-6" />
+                              <path d="m15 6 6 6-6 6" />
+                              <path d="m14 4-4 16" />
+                            </svg>
+                            Source
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="test-result-content">
+                          {selectedProblem.runFeedback ? (
+                            <>
+                              <div
+                                className={`result-summary ${getStatusClass(
+                                  selectedProblem.runFeedback.status,
+                                )}`}
+                              >
+                                <span>{selectedProblem.runFeedback.status}</span>
+                                <p>{selectedProblem.runFeedback.summary}</p>
+                              </div>
+
+                              <div className="result-case-list">
+                                {selectedProblem.runFeedback.cases.map((testcase) => {
+                                  return (
+                                    <details
+                                      className={`result-case ${getStatusClass(
+                                        testcase.status,
+                                      )}`}
+                                      key={testcase.name}
+                                    >
+                                      <summary>
+                                        <div>
+                                          <span>{testcase.name}</span>
+                                          <small>{testcase.message}</small>
+                                        </div>
+                                        <code>{testcase.status}</code>
+                                      </summary>
+
+                                      <div className="result-case-detail">
+                                        <div>
+                                          <span>Input</span>
+                                          <pre>
+                                            {testcase.input
+                                              ?.map((field) => {
+                                                return `${field.name} = ${field.value}`;
+                                              })
+                                              .join("\n") || "No input"}
+                                          </pre>
+                                        </div>
+                                        <div>
+                                          <span>Expected</span>
+                                          <pre>{testcase.expected || "N/A"}</pre>
+                                        </div>
+                                        <div>
+                                          <span>Actual</span>
+                                          <pre>{testcase.actual || "N/A"}</pre>
+                                        </div>
+                                      </div>
+                                    </details>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="test-empty">
+                              You must run your code first
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  </>
+                ) : (
+                  <div className="empty-code">
+                    <p>No problem selected.</p>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => {
+                        navigateTo("add");
+                      }}
+                    >
+                      Add problem
+                    </button>
+                  </div>
+                )}
+              </section>
+            </section>
+          </>
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 

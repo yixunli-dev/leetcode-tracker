@@ -1,16 +1,51 @@
-# React + Vite
+# LeetCode Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A lightweight React + Vite app for tracking LeetCode practice, solution notes,
+review status, and progress by topic.
 
-Currently, two official plugins are available:
+## Current Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Add, edit, and delete practice problems
+- Track difficulty, topic, status, LeetCode link, and last solved date
+- Write persistent notes for each problem
+- Filter by search text, topic, status, and difficulty
+- Import public LeetCode problem details by problem number or title slug in dev
+- View progress summary and solved percentage
+- Persist data in `localStorage`
 
-## React Compiler
+## Local Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+## Verification
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm run lint
+npm run build
+```
+
+## Project Roadmap
+
+1. Import and export tracker data as JSON.
+2. Add a production backend or serverless function for LeetCode imports.
+3. Add review scheduling with next review date and overdue filters.
+4. Add topic-level analytics and weekly solved charts.
+5. Split the app into smaller React components once the MVP behavior is stable.
+6. Add tests for storage, filtering, imports, and problem editing behavior.
+
+## LeetCode Import Notes
+
+The local Vite dev server exposes `/api/leetcode/problem?query=<number-or-slug>`.
+It imports public problem metadata, sanitized problem content, example testcases,
+topic tags, and code snippets. LeetCode hidden judge test cases are not public,
+so this app only stores example testcases plus your own custom notes/tests.
+
+## Tech Stack
+
+- React
+- Vite
+- ESLint
+- Browser `localStorage`
